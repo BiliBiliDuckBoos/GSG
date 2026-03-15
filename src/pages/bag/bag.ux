@@ -1,0 +1,118 @@
+<template>
+  <div class="bag-container">
+    <text class="bag-title">游戏统计</text>
+    
+    <div class="stats-area">
+      <div class="stat-row">
+        <text class="stat-label">总游戏次数:</text>
+        <text class="stat-value">{{ stats.totalGames }}</text>
+      </div>
+      <div class="stat-row">
+        <text class="stat-label">成功撤离:</text>
+        <text class="stat-value success">{{ stats.successfulExtracts }}</text>
+      </div>
+      <div class="stat-row">
+        <text class="stat-label">撤离失败:</text>
+        <text class="stat-value fail">{{ stats.failedExtracts }}</text>
+      </div>
+    </div>
+    
+    <div class="button-area">
+      <input class="btn back-btn" type="button" value="返回" onclick="goBack" />
+    </div>
+  </div>
+</template>
+
+<script>
+import router from "@system.router"
+import gamedata from "../../common/gamedata"
+
+export default {
+  private: {
+    stats: {
+      totalGames: 0,
+      successfulExtracts: 0,
+      failedExtracts: 0
+    }
+  },
+
+  onShow() {
+    gamedata.loadStats((data) => {
+      this.stats = data
+    })
+  },
+
+  goBack() {
+    router.back()
+  }
+}
+</script>
+
+<style>
+.bag-container {
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background-color: #e8f4fc;
+  padding: 10px;
+}
+
+.bag-title {
+  font-size: 20px;
+  color: #2c5282;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.stats-area {
+  flex: 1;
+  width: 100%;
+}
+
+.stat-row {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 10px;
+  margin-bottom: 8px;
+  background-color: #fff;
+  border-radius: 5px;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #2c5282;
+}
+
+.stat-value {
+  font-size: 16px;
+  color: #4a90d9;
+  font-weight: bold;
+}
+
+.stat-value.success {
+  color: #48bb78;
+}
+
+.stat-value.fail {
+  color: #e53e3e;
+}
+
+.button-area {
+  flex-direction: row;
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.btn {
+  width: 120px;
+  height: 36px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.back-btn {
+  background-color: #4a90d9;
+  color: #fff;
+}
+</style>

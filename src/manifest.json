@@ -1,0 +1,49 @@
+{
+  "package": "com.app.watch.gsg",
+  "name": "摸金",
+  "versionName": "1.0.0",
+  "versionCode": 1,
+  "minPlatformVersion": 1000,
+  "icon": "/common/logo.png",
+  "deviceTypeList": [
+    "watch"
+  ],
+  "features": [
+    {
+      "name": "system.router"
+    },
+    {
+      "name": "system.app"
+    },
+    {
+      "name": "system.storage"
+    }
+  ],
+  "config": {
+    "logLevel": "log",
+    "designWidth": "device-width"
+  },
+  "router": {
+    "entry": "pages/index",
+    "pages": {
+      "pages/index": {
+        "component": "index"
+      },
+      "pages/game": {
+        "component": "game"
+      },
+      "pages/gamebag": {
+        "component": "gamebag"
+      },
+      "pages/bag": {
+        "component": "bag"
+      },
+      "pages/about": {
+        "component": "about"
+      },
+      "pages/detail": {
+        "component": "detail"
+      }
+    }
+  }
+}

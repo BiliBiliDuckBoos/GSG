@@ -1,0 +1,534 @@
+<template>
+  <div class="page">
+    <div class="game-area">
+      <image class="map" src="/common/map.png" style="left: {{ mapX }}px; top: {{ mapY }}px; width: 1608px; height: 1600px;"></image>
+      <div class="player" style="left: {{ playerScreenX }}px; top: {{ playerScreenY }}px;"></div>
+      <div class="extract-zone" style="left: {{ extractScreenX }}px; top: {{ extractScreenY }}px; width: 44px; height: 44px;">
+        <text class="extract-text">撤离点</text>
+      </div>
+    </div>
+    
+    <div class="hud">
+      <text class="timer">{{ time }}</text>
+      <text class="pos">X:{{ Math.floor(px) }} Y:{{ Math.floor(py) }}</text>
+    </div>
+    
+    <div class="control-area">
+      <div class="joystick-area" ontouchstart="onJoystickStart" ontouchmove="onJoystickMove" ontouchend="onJoystickEnd">
+        <div class="joystick-base">
+          <div class="joystick-knob" style="left: {{ knobX }}px; top: {{ knobY }}px;"></div>
+          <div class="direction-indicator up"></div>
+          <div class="direction-indicator down"></div>
+          <div class="direction-indicator left"></div>
+          <div class="direction-indicator right"></div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="extract-modal" if="{{ inExtractZone }}">
+      <div class="modal-box">
+        <text class="modal-title">撤离中</text>
+        <text class="modal-count">{{ extractCountdown }}</text>
+        <text class="modal-hint">保持在撤离点内</text>
+      </div>
+    </div>
+    
+    <div class="result-modal" if="{{ showResult }}">
+      <div class="modal-box">
+        <text class="modal-title">{{ resultText }}</text>
+        <input type="button" value="返回主菜单" class="modal-btn" onclick="goHome" />
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import router from "@system.router"
+import wallData from "../../common/wallData"
+import gamedata from "../../common/gamedata"
+
+export default {
+  private: {
+    px: 180,
+    py: 95,
+    mapX: 0,
+    mapY: 0,
+    screenCenterX: 80,
+    screenCenterY: 120,
+    mapWidth: 402,
+    mapHeight: 400,
+    viewWidth: 40,
+    viewHeight: 60,
+    scale: 4,
+    time: "30:00",
+    sec: 1800,
+    timer: null,
+    moveTimer: null,
+    moveUp: false,
+    moveDown: false,
+    moveLeft: false,
+    moveRight: false,
+    inExtractZone: false,
+    extractCountdown: 5,
+    extractTimer: null,
+    showResult: false,
+    resultText: "",
+    extractScreenX: 0,
+    extractScreenY: 0,
+    playerScreenX: 0,
+    playerScreenY: 0,
+    knobX: 55,
+    knobY: 55,
+    joystickCenterX: 0,
+    joystickCenterY: 0,
+    joystickActive: false,
+    gameEnded: false,
+    extractZoneX1: 134,
+    extractZoneY1: 18,
+    extractZoneX2: 145,
+    extractZoneY2: 29
+  },
+
+  onShow() {
+    this.initGame()
+  },
+
+  onHide() {
+    this.stopAll()
+  },
+
+  onDestroy() {
+    this.stopAll()
+  },
+
+  initGame() {
+    this.gameEnded = false
+    gamedata.loadStats(() => {})
+    this.px = this.findSafeSpawnX()
+    this.py = this.findSafeSpawnY()
+    this.sec = 1800
+    this.showResult = false
+    this.inExtractZone = false
+    this.extractCountdown = 5
+    this.moveUp = false
+    this.moveDown = false
+    this.moveLeft = false
+    this.moveRight = false
+    this.knobX = 45
+    this.knobY = 45
+    this.joystickActive = false
+    this.updateMap()
+    this.startTimer()
+  },
+
+  findSafeSpawnX() {
+    const candidates = [100, 150, 200, 250, 300]
+    for (let x of candidates) {
+      if (!this.checkWallAt(x, 95) && !this.checkWallAt(x, 96)) {
+        return x
+      }
+    }
+    return 180
+  },
+
+  findSafeSpawnY() {
+    const candidates = [80, 100, 120, 140]
+    for (let y of candidates) {
+      if (!this.checkWallAt(180, y) && !this.checkWallAt(180, y + 1)) {
+        return y
+      }
+    }
+    return 95
+  },
+
+  stopAll() {
+    if (this.timer) {
+      clearInterval(this.timer)
+      this.timer = null
+    }
+    if (this.moveTimer) {
+      clearInterval(this.moveTimer)
+      this.moveTimer = null
+    }
+    if (this.extractTimer) {
+      clearInterval(this.extractTimer)
+      this.extractTimer = null
+    }
+  },
+
+  startTimer() {
+    this.timer = setInterval(() => {
+      if (this.gameEnded) return
+      this.sec = this.sec - 1
+      const m = Math.floor(this.sec / 60)
+      const s = this.sec % 60
+      this.time = m + ":" + (s < 10 ? "0" + s : s)
+      if (this.sec <= 0) {
+        this.gameEnded = true
+        this.stopAll()
+        gamedata.recordGame(false)
+        this.resultText = "时间到，撤离失败"
+        this.showResult = true
+      }
+    }, 1000)
+  },
+
+  updateMap() {
+    const scale = this.scale
+    
+    const scaledMapWidth = this.mapWidth * scale
+    const scaledMapHeight = this.mapHeight * scale
+    
+    const displayWidth = this.viewWidth * scale
+    const displayHeight = this.viewHeight * scale
+    
+    this.mapX = this.screenCenterX - this.px * scale
+    this.mapY = this.screenCenterY - this.py * scale
+    
+    if (this.mapX > 0) this.mapX = 0
+    if (this.mapY > 0) this.mapY = 0
+    if (this.mapX < displayWidth - scaledMapWidth) this.mapX = displayWidth - scaledMapWidth
+    if (this.mapY < displayHeight - scaledMapHeight) this.mapY = displayHeight - scaledMapHeight
+    
+    this.playerScreenX = this.mapX + this.px * scale
+    this.playerScreenY = this.mapY + this.py * scale
+    
+    this.extractScreenX = this.mapX + this.extractZoneX1 * scale
+    this.extractScreenY = this.mapY + this.extractZoneY1 * scale
+  },
+
+  checkWallAt(x, y) {
+    return wallData.isWall(Math.floor(x), Math.floor(y))
+  },
+
+  canMoveTo(newX, newY) {
+    if (newX < 0 || newX >= this.mapWidth) return false
+    if (newY < 0 || newY + 1 >= this.mapHeight) return false
+    
+    const x1 = Math.floor(newX)
+    const y1 = Math.floor(newY)
+    const y2 = Math.floor(newY + 1)
+    
+    if (this.checkWallAt(x1, y1)) return false
+    if (this.checkWallAt(x1, y2)) return false
+    
+    return true
+  },
+
+  checkMove() {
+    if (this.moveUp || this.moveDown || this.moveLeft || this.moveRight) {
+      if (!this.moveTimer) {
+        this.moveTimer = setInterval(() => {
+          this.doMove()
+        }, 50)
+      }
+    } else {
+      if (this.moveTimer) {
+        clearInterval(this.moveTimer)
+        this.moveTimer = null
+      }
+    }
+  },
+
+  doMove() {
+    const speed = 1
+    let newX = this.px
+    let newY = this.py
+    
+    if (this.moveUp) newY = newY - speed
+    if (this.moveDown) newY = newY + speed
+    if (this.moveLeft) newX = newX - speed
+    if (this.moveRight) newX = newX + speed
+    
+    if (this.canMoveTo(newX, this.py)) {
+      this.px = newX
+    }
+    if (this.canMoveTo(this.px, newY)) {
+      this.py = newY
+    }
+    
+    this.updateMap()
+    this.checkExtractZone()
+  },
+
+  checkExtractZone() {
+    if (this.gameEnded) return
+    
+    const inZone = this.px >= this.extractZoneX1 && this.px <= this.extractZoneX2 && 
+                   this.py >= this.extractZoneY1 && this.py <= this.extractZoneY2
+    
+    if (inZone && !this.inExtractZone) {
+      this.inExtractZone = true
+      this.extractCountdown = 5
+      this.startExtract()
+    } else if (!inZone && this.inExtractZone) {
+      this.inExtractZone = false
+      if (this.extractTimer) {
+        clearInterval(this.extractTimer)
+        this.extractTimer = null
+      }
+    }
+  },
+
+  startExtract() {
+    this.extractTimer = setInterval(() => {
+      if (this.gameEnded) return
+      if (!this.inExtractZone) {
+        clearInterval(this.extractTimer)
+        this.extractTimer = null
+        return
+      }
+      this.extractCountdown = this.extractCountdown - 1
+      if (this.extractCountdown <= 0) {
+        this.gameEnded = true
+        this.stopAll()
+        gamedata.recordGame(true)
+        router.replace({ uri: "/pages/index" })
+      }
+    }, 1000)
+  },
+
+  onJoystickStart(e) {
+    this.joystickActive = true
+    this.joystickCenterX = e.touches[0].clientX
+    this.joystickCenterY = e.touches[0].clientY
+    this.updateJoystick(e)
+  },
+
+  onJoystickMove(e) {
+    if (!this.joystickActive) return
+    this.updateJoystick(e)
+  },
+
+  onJoystickEnd() {
+    this.joystickActive = false
+    this.knobX = 55
+    this.knobY = 55
+    this.moveUp = false
+    this.moveDown = false
+    this.moveLeft = false
+    this.moveRight = false
+    this.checkMove()
+  },
+
+  updateJoystick(e) {
+    const touchX = e.touches[0].clientX
+    const touchY = e.touches[0].clientY
+    let dx = touchX - this.joystickCenterX
+    let dy = touchY - this.joystickCenterY
+    
+    const maxDist = 45
+    const dist = Math.sqrt(dx * dx + dy * dy)
+    if (dist > maxDist) {
+      dx = dx / dist * maxDist
+      dy = dy / dist * maxDist
+    }
+    
+    this.knobX = 55 + dx
+    this.knobY = 55 + dy
+    
+    const threshold = 15
+    this.moveUp = dy < -threshold
+    this.moveDown = dy > threshold
+    this.moveLeft = dx < -threshold
+    this.moveRight = dx > threshold
+    
+    this.checkMove()
+  },
+
+  goHome() {
+    router.replace({ uri: "/pages/index" })
+  }
+}
+</script>
+
+<style>
+.page {
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background-color: #e8f4fc;
+}
+
+.game-area {
+  width: 100%;
+  height: 240px;
+  position: relative;
+  overflow: hidden;
+  background-color: #d0e8f5;
+}
+
+.map {
+  position: absolute;
+}
+
+.player {
+  position: absolute;
+  width: 4px;
+  height: 8px;
+  background-color: #000000;
+  border-width: 0px;
+}
+
+.extract-zone {
+  position: absolute;
+  background-color: rgba(72, 187, 120, 0.5);
+  border-width: 2px;
+  border-color: #48bb78;
+  justify-content: center;
+  align-items: center;
+}
+
+.extract-text {
+  font-size: 16px;
+  color: #276749;
+}
+
+.hud {
+  flex-direction: row;
+  justify-content: space-between;
+  padding: 3px 10px;
+  background-color: #b8d4e8;
+}
+
+.timer {
+  font-size: 12px;
+  color: #e53e3e;
+}
+
+.pos {
+  font-size: 12px;
+  color: #2c5282;
+}
+
+.control-area {
+  flex: 1;
+  justify-content: center;
+  align-items: center;
+}
+
+.joystick-area {
+  width: 140px;
+  height: 140px;
+  justify-content: center;
+  align-items: center;
+}
+
+.joystick-base {
+  width: 110px;
+  height: 110px;
+  background-color: #fff;
+  border-width: 3px;
+  border-color: #b8d4e8;
+  border-radius: 55px;
+  position: relative;
+  justify-content: center;
+  align-items: center;
+}
+
+.joystick-knob {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  background-color: #4a90d9;
+  border-radius: 20px;
+  left: 55px;
+  top: 55px;
+  margin-left: -20px;
+  margin-top: -20px;
+}
+
+.direction-indicator {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.direction-indicator.up {
+  top: 3px;
+  left: 47px;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 10px solid #b8d4e8;
+}
+
+.direction-indicator.down {
+  bottom: 3px;
+  left: 47px;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 10px solid #b8d4e8;
+}
+
+.direction-indicator.left {
+  left: 3px;
+  top: 47px;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-right: 10px solid #b8d4e8;
+}
+
+.direction-indicator.right {
+  right: 3px;
+  top: 47px;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-left: 10px solid #b8d4e8;
+}
+
+.extract-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  justify-content: center;
+  align-items: center;
+}
+
+.result-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-box {
+  background-color: #fff;
+  padding: 15px;
+  border-radius: 8px;
+  align-items: center;
+}
+
+.modal-title {
+  font-size: 16px;
+  color: #2c5282;
+  margin-bottom: 5px;
+}
+
+.modal-count {
+  font-size: 24px;
+  color: #48bb78;
+  font-weight: bold;
+}
+
+.modal-hint {
+  font-size: 10px;
+  color: #718096;
+}
+
+.modal-btn {
+  width: 100px;
+  height: 30px;
+  margin-top: 10px;
+  background-color: #4a90d9;
+  color: #fff;
+  font-size: 12px;
+  border-radius: 4px;
+}
+</style>
